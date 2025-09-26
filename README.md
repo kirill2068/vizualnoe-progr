@@ -66,4 +66,4 @@ println("\nКонечное состояние:")
         println("${human.surname} ${human.name} ${human.second_n}: ${human.getCoordinate()}")
 ```
     }
-'''
+
