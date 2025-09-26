@@ -64,6 +64,5 @@ var i = 0
 println("\nКонечное состояние:")
     for (human in humans) {
         println("${human.surname} ${human.name} ${human.second_n}: ${human.getCoordinate()}")
-```
     }
-
+```
