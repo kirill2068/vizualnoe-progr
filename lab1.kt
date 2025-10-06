@@ -1,9 +1,9 @@
 import kotlin.random.Random
 
 class Human {
-    var surname: String =""
-    var name: String =""
-    var second_n: String =""
+    var surname: String 
+    var name: String 
+    var second_n: String 
     var age: Int = 0
     var speed: Double = 0.0
 
