@@ -154,54 +154,6 @@ linkedList.removeLast()
        (меняются только указатели)
 ```
 
-## Практические примеры на Kotlin
-
-### Реализация связного списка
-
-```kotlin
-class LinkedList<T> {
-    private var head: Node<T>? = null
-    
-    fun addFirst(data: T) {
-        head = Node(data, head)
-    }
-    
-    fun addLast(data: T) {
-        val newNode = Node(data)
-        if (head == null) {
-            head = newNode
-            return
-        }
-        var current = head
-        while (current?.next != null) {
-            current = current.next
-        }
-        current?.next = newNode
-    }
-    
-    fun removeFirst(): T? {
-        val data = head?.data
-        head = head?.next
-        return data
-    }
-    
-    fun printList() {
-        var current = head
-        while (current != null) {
-            print("${current.data} -> ")
-            current = current.next
-        }
-        println("null")
-    }
-}
-
-// Использование
-val list = LinkedList<Int>()
-list.addLast(10)
-list.addLast(20)
-list.addFirst(5)
-list.printList() // 5 -> 10 -> 20 -> null
-```
 
 
 
