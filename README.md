@@ -1,8 +1,10 @@
-Симонов Кирилл
-ИКС-432
-
-
+```markdown
 # Структуры данных: как массивы и связные списки устроены в памяти
+
+**Симонов Кирилл**  
+**ИКС-432**
+
+## Массив: непрерывность и предсказуемость
 
 ### Схематическое представление массива в памяти
 
@@ -12,14 +14,13 @@
 Данные: |   A[0] |   A[1] |   A[2] |   A[3] |   A[4] |
        +--------+--------+--------+--------+--------+
 Индекс:    0        1        2        3        4
-
 ```
 
 ### Как устроен массив
 
 Массив представляет собой **непрерывный блок памяти**, где все элементы расположены последовательно друг за другом. Каждый элемент имеет одинаковый размер, что позволяет вычислять адрес любого элемента по формуле:
 
-```c
+```
 адрес_элемента[i] = начальный_адрес + i × размер_элемента
 ```
 
@@ -29,11 +30,28 @@
 - **Быстрый доступ** — обращение к любому элементу за константное время O(1)
 - **Кэш-дружественность** — благодаря локализации данных хорошо работает с кэшем процессора
 
-### Пример в коде
+### Пример в коде на Kotlin
 
-```c
-int arr[5] = {10, 20, 30, 40, 50};
-// В памяти: [10][20][30][40][50]
+```kotlin
+// Создание массива
+val array = arrayOf(10, 20, 30, 40, 50)
+// Или для примитивных типов
+val intArray = intArrayOf(10, 20, 30, 40, 50)
+
+// Доступ к элементам
+println(array[0])  // 10 - доступ за O(1)
+println(array[2])  // 30
+
+// Изменение элемента
+array[1] = 25
+
+// Итерация по массиву
+for (i in array.indices) {
+    println("array[$i] = ${array[i]}")
+}
+
+// Двумерный массив
+val matrix = Array(3) { IntArray(3) }
 ```
 
 ## Связный список: гибкость и динамичность
@@ -57,12 +75,16 @@ int arr[5] = {10, 20, 30, 40, 50};
 1. **Полезные данные** — хранимая информация
 2. **Указатель/ссылка** — адрес следующего узла в списке
 
-**Структура узла:**
-```c
-struct Node {
-    int data;           // Полезные данные
-    struct Node* next;  // Указатель на следующий узел
-};
+**Структура узла на Kotlin:**
+```kotlin
+class Node<T>(
+    var data: T,
+    var next: Node<T>? = null
+) {
+    override fun toString(): String {
+        return "Node(data=$data, next=${next?.data})"
+    }
+}
 ```
 
 **Ключевые характеристики:**
@@ -71,18 +93,41 @@ struct Node {
 - **Гибкость вставки/удаления** — изменение только указателей
 - **Последовательный доступ** — для доступа к элементу нужно пройти все предыдущие
 
-### Пример в коде
+### Пример в коде на Kotlin
 
-```c
-// Создание узлов
-struct Node* node1 = malloc(sizeof(struct Node));
-struct Node* node2 = malloc(sizeof(struct Node));
-struct Node* node3 = malloc(sizeof(struct Node));
+```kotlin
+// Создание узлов и формирование списка
+val node1 = Node(10)
+val node2 = Node(20)
+val node3 = Node(30)
 
-// Формирование списка
-node1->data = 10; node1->next = node2;
-node2->data = 20; node2->next = node3;
-node3->data = 30; node3->next = NULL;
+node1.next = node2
+node2.next = node3
+
+// Альтернативный способ создания
+val head = Node(10, Node(20, Node(30)))
+
+// Функция для печати списка
+fun <T> printList(head: Node<T>?) {
+    var current = head
+    while (current != null) {
+        print("${current.data} -> ")
+        current = current.next
+    }
+    println("null")
+}
+
+// Использование стандартного LinkedList из Kotlin
+val linkedList = LinkedList<Int>()
+linkedList.add(10)
+linkedList.add(20)
+linkedList.add(30)
+
+// Вставка в начало
+linkedList.addFirst(5)
+
+// Удаление из конца
+linkedList.removeLast()
 ```
 
 ## Сравнительный анализ
@@ -118,4 +163,84 @@ node3->data = 30; node3->next = NULL;
        (меняются только указатели)
 ```
 
+## Практические примеры на Kotlin
 
+### Реализация связного списка
+
+```kotlin
+class LinkedList<T> {
+    private var head: Node<T>? = null
+    
+    fun addFirst(data: T) {
+        head = Node(data, head)
+    }
+    
+    fun addLast(data: T) {
+        val newNode = Node(data)
+        if (head == null) {
+            head = newNode
+            return
+        }
+        var current = head
+        while (current?.next != null) {
+            current = current.next
+        }
+        current?.next = newNode
+    }
+    
+    fun removeFirst(): T? {
+        val data = head?.data
+        head = head?.next
+        return data
+    }
+    
+    fun printList() {
+        var current = head
+        while (current != null) {
+            print("${current.data} -> ")
+            current = current.next
+        }
+        println("null")
+    }
+}
+
+// Использование
+val list = LinkedList<Int>()
+list.addLast(10)
+list.addLast(20)
+list.addFirst(5)
+list.printList() // 5 -> 10 -> 20 -> null
+```
+
+### Сравнение производительности
+
+```kotlin
+fun main() {
+    val size = 100000
+    
+    // Тест массива
+    val array = IntArray(size) { it }
+    val arrayStart = System.currentTimeMillis()
+    for (i in 0 until size) {
+        val element = array[i] // O(1)
+    }
+    val arrayTime = System.currentTimeMillis() - arrayStart
+    
+    // Тест списка
+    val list = LinkedList<Int>()
+    for (i in 0 until size) {
+        list.addLast(i)
+    }
+    val listStart = System.currentTimeMillis()
+    // Для доступа к элементу по индексу в списке нужно O(n)
+    val listTime = System.currentTimeMillis() - listStart
+    
+    println("Массив: ${arrayTime}ms")
+    println("Список: ${listTime}ms")
+}
+```
+
+## Заключение
+
+Понимание организации памяти в массивах и связных списках позволяет выбирать оптимальные структуры данных для конкретных задач. В Kotlin обе структуры широко используются, и выбор между ними зависит от конкретных требований приложения к производительности и функциональности.
+```
