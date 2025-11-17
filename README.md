@@ -203,32 +203,5 @@ list.addFirst(5)
 list.printList() // 5 -> 10 -> 20 -> null
 ```
 
-### Сравнение производительности
-
-```kotlin
-fun main() {
-    val size = 100000
-    
-    // Тест массива
-    val array = IntArray(size) { it }
-    val arrayStart = System.currentTimeMillis()
-    for (i in 0 until size) {
-        val element = array[i] // O(1)
-    }
-    val arrayTime = System.currentTimeMillis() - arrayStart
-    
-    // Тест списка
-    val list = LinkedList<Int>()
-    for (i in 0 until size) {
-        list.addLast(i)
-    }
-    val listStart = System.currentTimeMillis()
-    // Для доступа к элементу по индексу в списке нужно O(n)
-    val listTime = System.currentTimeMillis() - listStart
-    
-    println("Массив: ${arrayTime}ms")
-    println("Список: ${listTime}ms")
-}
-```
 
 
