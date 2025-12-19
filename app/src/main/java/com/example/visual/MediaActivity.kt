@@ -102,6 +102,8 @@ class MediaActivity : AppCompatActivity() {
 
         listView.setOnItemClickListener { _, _, position, _ ->
             playTrack(position)
+            Toast.makeText(this, "$position", Toast.LENGTH_SHORT).show()
+
         }
     }
 
@@ -139,7 +141,6 @@ class MediaActivity : AppCompatActivity() {
             handler.postDelayed(updateRunnable!!, 1000)
         }
     }
-
     private fun formatTime(ms: Int): String {
         val s = ms / 1000
         val min = s / 60
