@@ -128,7 +128,7 @@ class MediaActivity : AppCompatActivity() {
         updateProgress()
     }
 
-    private fun updateProgress(у) {
+    private fun updateProgress() {
         if (::mediaPlayer.isInitialized && mediaPlayer.isPlaying) {
             val pos = mediaPlayer.currentPosition
             seekBar.progress = pos
