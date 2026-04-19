@@ -4,222 +4,184 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
+import android.location.*
+import android.os.*
 import android.provider.Settings
-import android.util.Log
+import android.telephony.*
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
-import androidx.annotation.RequiresPermission
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import org.json.JSONObject
 import org.zeromq.ZContext
 import org.zeromq.ZMQ
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
 
 class LocationActivity : AppCompatActivity(), LocationListener {
 
-    private lateinit var locationManager: LocationManager
+    private lateinit var lm: LocationManager
     private lateinit var tvLat: TextView
     private lateinit var tvLon: TextView
     private lateinit var tvAlt: TextView
     private lateinit var tvTime: TextView
-    private lateinit var btnClearLog: Button
-
-    private val PERMISSION_REQUEST_CODE = 100
-    private val TAG = "LocationActivity"
-
-    private val timeHandler = Handler(Looper.getMainLooper())
-    private val timeRunnable = object : Runnable {
-        override fun run() {
-            updateCurrentTime()
-            timeHandler.postDelayed(this, 1000)
-        }
-    }
-
+    private val handler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_location)
-
         tvLat = findViewById(R.id.tv_lat)
         tvLon = findViewById(R.id.tv_lon)
         tvAlt = findViewById(R.id.tv_alt)
         tvTime = findViewById(R.id.tv_time)
-        btnClearLog = findViewById(R.id.btn_clear_log)
-
-        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
-        btnClearLog.setOnClickListener {
+        lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        findViewById<Button>(R.id.btn_clear_log).setOnClickListener {
             tvLat.text = "Широта: "
             tvLon.text = "Долгота: "
             tvAlt.text = "Высота: "
-            try {
-                File(externalCacheDir, "location.json").delete()
-                Toast.makeText(this, "Лог очищен", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Log.e(TAG, "Ошибка при очистке файла: ${e.message}")
-            }
+            File(externalCacheDir, "location.json").delete()
+            Toast.makeText(this, "Лог очищен", Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        timeHandler.post(timeRunnable)
-
-        val fineLocationGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        val coarseLocationGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (fineLocationGranted && coarseLocationGranted) {
-            if (isLocationEnabled()) {
-                startLocation()
-            } else {
-                openSettings()
+        handler.post(object : Runnable {
+            override fun run() {
+                tvTime.text = "Время: ${SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date())}"
+                handler.postDelayed(this, 1000)
             }
-        } else {
-            requestPermissions()
-        }
+        })
+        if (listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.READ_PHONE_STATE)
+                .all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
+            if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) startLocationUpdates()
+            else startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+        } else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.READ_PHONE_STATE), 100)
     }
 
     override fun onPause() {
         super.onPause()
-        timeHandler.removeCallbacks(timeRunnable)
-        locationManager.removeUpdates(this)
+        handler.removeCallbacksAndMessages(null)
+        lm.removeUpdates(this)
     }
 
-    private fun requestPermissions() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ),
-            PERMISSION_REQUEST_CODE
-        )
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        if (requestCode == 100 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) startLocationUpdates()
+            else startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+        } else Toast.makeText(this, "Нужны разрешения", Toast.LENGTH_LONG).show()
     }
 
-    private fun isLocationEnabled(): Boolean {
-        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+    private fun startLocationUpdates() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 1f, this)
+        lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { showLocation(it) }
     }
 
-    private fun openSettings() {
-        Toast.makeText(this, "Включите геолокацию", Toast.LENGTH_SHORT).show()
-        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-        startActivity(intent)
+    private fun showLocation(loc: Location) {
+        tvLat.text = "Широта: ${loc.latitude}"
+        tvLon.text = "Долгота: ${loc.longitude}"
+        tvAlt.text = "Высота: ${loc.altitude} м"
     }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
-    private fun startLocation() {
-        locationManager.requestLocationUpdates(
-            LocationManager.GPS_PROVIDER,
-            5000,
-            1f,
-            this
-        )
-
-        val lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        if (lastLocation != null) {
-            showLocation(lastLocation)
-        }
+    override fun onLocationChanged(loc: Location) {
+        showLocation(loc)
+        val netInfo = collectNetworkInfo()
+        saveToJson(loc, netInfo)
+        executor.execute { sendToServer(loc, netInfo) }
     }
 
-    private fun updateCurrentTime() {
-        val currentTime = System.currentTimeMillis()
-        val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm:ss")
-        formatter.timeZone = TimeZone.getDefault()
-        val formattedTime = formatter.format(Date(currentTime))
-        tvTime.text = "Время: $formattedTime"
-    }
-
-    private fun showLocation(location: Location) {
-        tvLat.text = "Широта: ${location.latitude}"
-        tvLon.text = "Долгота: ${location.longitude}"
-        tvAlt.text = "Высота: ${location.altitude} м"
-    }
-
-    private fun saveToJson(location: Location) {
-        val currentTime = System.currentTimeMillis()
-        val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm:ss")
-        formatter.timeZone = TimeZone.getDefault()
-        val formattedTime = formatter.format(Date(currentTime))
-
-        val json = """
-        {
-            "latitude": ${location.latitude},
-            "longitude": ${location.longitude},
-            "altitude": ${location.altitude},
-            "time": "$formattedTime"
-        }
-        """
-
-        val file = File(externalCacheDir, "location.json")
-        file.writeText(json)
-    }
-
-    private fun sendToServer(location: Location) {
-        var context: ZContext? = null
-        var socket: ZMQ.Socket? = null
-
-        try {
-            val SERVER_IP = "172.25.212.40"
-            val SERVER_PORT = 5555
-            context = ZContext()
-            socket = context.createSocket(ZMQ.REQ)
-            socket.setReceiveTimeOut(3000)
-            socket.setSendTimeOut(3000)
-            socket.connect("tcp://$SERVER_IP:$SERVER_PORT")
-            val currentTime = System.currentTimeMillis()
-            val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm:ss")
-            formatter.timeZone = TimeZone.getDefault()
-            val formattedTime = formatter.format(Date(currentTime))
-
-            val json = """
-                {
-                    "latitude": ${location.latitude},
-                    "longitude": ${location.longitude},
-                    "altitude": ${location.altitude},
-                    "time": "$formattedTime"
+    private fun collectNetworkInfo(): JSONObject {
+        val json = JSONObject()
+        val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager ?: return json
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return json.put("networkType", "No permission")
+        json.put("networkOperator", tm.networkOperator ?: "")
+        json.put("networkOperatorName", tm.networkOperatorName?.toString() ?: "")
+        json.put("networkType", when (tm.dataNetworkType) {
+            TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
+            TelephonyManager.NETWORK_TYPE_GSM -> "GSM"
+            TelephonyManager.NETWORK_TYPE_NR -> "NR"
+            else -> "Unknown"
+        })
+        tm.allCellInfo?.forEach { cell ->
+            when (cell) {
+                is CellInfoLte -> {
+                    val id = cell.cellIdentity as CellIdentityLte
+                    val sig = cell.cellSignalStrength
+                    json.put("lteBand", if (id.bands.isNotEmpty()) id.bands[0] else -1)
+                    json.put("lteCellId", id.ci).put("lteEarfcn", id.earfcn).put("lteMcc", id.mcc).put("lteMnc", id.mnc)
+                    json.put("ltePci", id.pci).put("lteTac", id.tac).put("lteAsuLevel", sig.asuLevel).put("lteCqi", sig.cqi)
+                    json.put("lteRsrp", sig.rsrp).put("lteRsrq", sig.rsrq).put("lteRssi", sig.rssi).put("lteRssnr", sig.rssnr)
+                    json.put("lteTimingAdvance", sig.timingAdvance)
                 }
-            """.trimIndent()
-
-            socket.send(json.toByteArray(Charsets.UTF_8), 0)
-            val reply = socket.recvStr(0)
-            if (reply != null) {
-                Log.d(TAG, "Успешно отправлено на сервер: $reply")
-            } else {
-                Log.w(TAG, "Отправлено, но ответ не получен")
+                is CellInfoGsm -> {
+                    val id = cell.cellIdentity
+                    val sig = cell.cellSignalStrength
+                    json.put("gsmCellId", id.cid).put("gsmBsic", id.bsic).put("gsmArfcn", id.arfcn).put("gsmLac", id.lac)
+                    json.put("gsmMcc", id.mcc).put("gsmMnc", id.mnc).put("gsmPsc", id.psc).put("gsmDbm", sig.dbm)
+                    json.put("gsmRssi", sig.rssi).put("gsmTimingAdvance", sig.timingAdvance)
+                }
+                is CellInfoNr -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val id = cell.cellIdentity
+                    val sig = cell.cellSignalStrength
+                    fun Any.getInt(m: String) = try { javaClass.getMethod(m).invoke(this) as? Int ?: -1 } catch (e: Exception) { -1 }
+                    fun Any.getLong(m: String) = try { javaClass.getMethod(m).invoke(this) as? Long ?: -1L } catch (e: Exception) { -1L }
+                    json.put("nrBand", id.getInt("getBand")).put("nrNci", id.getLong("getNci")).put("nrPci", id.getInt("getPci"))
+                    json.put("nrNrarfcn", id.getInt("getNrarfcn")).put("nrTac", id.getInt("getTac")).put("nrMcc", id.getInt("getMcc"))
+                    json.put("nrMnc", id.getInt("getMnc")).put("nrSsRsrp", sig.getInt("getSsRsrp")).put("nrSsRsrq", sig.getInt("getSsRsrq"))
+                    json.put("nrSsSinr", sig.getInt("getSsSinr")).put("nrTimingAdvance", sig.getInt("getTimingAdvance"))
+                }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка подключения к серверу: ${e.message}")
-            Log.e(TAG, "Автоматическое переподключение при следующем обновлении местоположения")
-        } finally {
-            socket?.close()
-            context?.close()
         }
+        return json
     }
 
-    override fun onLocationChanged(location: Location) {
-        showLocation(location)
-        saveToJson(location)
-        executor.execute {
-            sendToServer(location)
-        }
+    private fun saveToJson(loc: Location, net: JSONObject) {
+        try {
+            val time = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date())
+            val json = JSONObject().apply {
+                put("latitude", loc.latitude).put("longitude", loc.longitude).put("altitude", loc.altitude)
+                put("accuracy", loc.accuracy).put("time", time)
+                put("networkType", net.optString("networkType")).put("networkOperator", net.optString("networkOperator"))
+                put("networkOperatorName", net.optString("networkOperatorName"))
+            }
+            File(externalCacheDir, "location.json").writeText(json.toString(2))
+        } catch (e: Exception) { }
     }
+
+    private fun sendToServer(loc: Location, net: JSONObject) {
+        var ctx: ZContext? = null
+        var sock: ZMQ.Socket? = null
+        try {
+            ctx = ZContext()
+            sock = ctx.createSocket(ZMQ.REQ).apply {
+                receiveTimeOut = 3000
+                sendTimeOut = 3000
+                connect("tcp://172.25.212.40:5555")
+            }
+            val json = JSONObject().apply {
+                put("latitude", loc.latitude).put("longitude", loc.longitude).put("altitude", loc.altitude).put("accuracy", loc.accuracy)
+                put("time", SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date()))
+                put("networkType", net.optString("networkType", "Unknown"))
+                put("networkOperator", net.optString("networkOperator", ""))
+                put("networkOperatorName", net.optString("networkOperatorName", ""))
+                listOf("lteBand","lteCellId","lteEarfcn","lteMcc","lteMnc","ltePci","lteTac","lteAsuLevel","lteCqi","lteRsrp","lteRsrq","lteRssi","lteRssnr","lteTimingAdvance").forEach { put(it, net.optInt(it, -1)) }
+                listOf("gsmCellId","gsmBsic","gsmArfcn","gsmLac","gsmMcc","gsmMnc","gsmPsc","gsmDbm","gsmRssi","gsmTimingAdvance").forEach { put(it, net.optInt(it, -1)) }
+                listOf("nrBand","nrPci","nrNrarfcn","nrTac","nrMcc","nrMnc","nrSsRsrp","nrSsRsrq","nrSsSinr","nrTimingAdvance").forEach { put(it, net.optInt(it, -1)) }
+                put("nrNci", net.optLong("nrNci", -1L))
+            }
+            sock.send(json.toString().toByteArray(StandardCharsets.UTF_8))
+            sock.recvStr(0)
+        } catch (e: Exception) { } finally { sock?.close(); ctx?.close() }
+    }
+
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+    override fun onProviderEnabled(provider: String) {}
+    override fun onProviderDisabled(provider: String) {}
 }
